@@ -1,0 +1,186 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum SubscriptionStatus {
+  PENDING
+  ACTIVE
+  EXPIRED
+  REJECTED
+}
+
+enum PaymentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  password      String
+  role          UserRole  @default(USER)
+  emailVerified DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  subscriptions Subscription[]
+  payments      Payment[]
+
+  @@index([email])
+}
+
+model House {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?  @db.Text
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  results     Result[]
+  predictions Prediction[]
+
+  @@index([isActive])
+}
+
+model Result {
+  id        String   @id @default(cuid())
+  houseId   String
+  date      DateTime @db.Date
+  firstRound Int?
+  secondRound Int?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  house House @relation(fields: [houseId], references: [id], onDelete: Cascade)
+
+  @@unique([houseId, date])
+  @@index([houseId, date])
+  @@index([date])
+}
+
+model Prediction {
+  id              String   @id @default(cuid())
+  houseId         String
+  date            DateTime @db.Date
+
+  // Common Numbers (frequency analysis)
+  commonFirst     String   @db.Text // JSON array of top common numbers for first round
+  commonSecond    String   @db.Text // JSON array of top common numbers for second round
+
+  // Direct Numbers (exact matches)
+  directFirst     String   @db.Text // JSON array
+  directSecond    String   @db.Text // JSON array
+
+  // House Numbers (house-specific patterns)
+  houseFirst      String   @db.Text // JSON array
+  houseSecond     String   @db.Text // JSON array
+
+  // Ending Numbers (last digit patterns)
+  endingFirst     String   @db.Text // JSON array
+  endingSecond    String   @db.Text // JSON array
+
+  // Hot Numbers (frequently appearing recently)
+  hotFirst        String   @db.Text // JSON array
+  hotSecond       String   @db.Text // JSON array
+
+  // Cold Numbers (rarely appearing recently)
+  coldFirst       String   @db.Text // JSON array
+  coldSecond      String   @db.Text // JSON array
+
+  generatedAt     DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  house House @relation(fields: [houseId], references: [id], onDelete: Cascade)
+
+  @@unique([houseId, date])
+  @@index([houseId, date])
+  @@index([date])
+}
+
+model SubscriptionPackage {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  days        Int
+  price       Int // In rupees
+  description String?  @db.Text
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  subscriptions Subscription[]
+
+  @@index([isActive])
+}
+
+model Subscription {
+  id          String             @id @default(cuid())
+  userId      String
+  packageId   String
+  status      SubscriptionStatus @default(PENDING)
+  startDate   DateTime?
+  endDate     DateTime?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  user    User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  package SubscriptionPackage @relation(fields: [packageId], references: [id])
+  payment Payment?
+
+  @@index([userId, status])
+  @@index([status])
+}
+
+model PaymentMethod {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  qrImageUrl  String   @db.Text
+  upiId       String?
+  description String?  @db.Text
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  payments Payment[]
+
+  @@index([isActive])
+}
+
+model Payment {
+  id              String        @id @default(cuid())
+  userId          String
+  subscriptionId  String        @unique
+  paymentMethodId String
+  amount          Int // In rupees
+  proofImageUrl   String        @db.Text
+  status          PaymentStatus @default(PENDING)
+  remarks         String?       @db.Text
+  approvedAt      DateTime?
+  rejectedAt      DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscription   Subscription    @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  paymentMethod  PaymentMethod   @relation(fields: [paymentMethodId], references: [id])
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
